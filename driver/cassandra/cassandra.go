@@ -9,9 +9,9 @@ import (
 	"time"
 
 	"github.com/gocql/gocql"
-	"github.com/mattes/migrate/driver"
-	"github.com/mattes/migrate/file"
-	"github.com/mattes/migrate/migrate/direction"
+	"github.com/neocortical/migrate/driver"
+	"github.com/neocortical/migrate/file"
+	"github.com/neocortical/migrate/migrate/direction"
 )
 
 type Driver struct {
@@ -19,13 +19,13 @@ type Driver struct {
 }
 
 const (
-	tableName  = "schema_migrations"
-	versionRow = 1
+	tablePrefix = "migrations_"
+	versionRow  = 1
 )
 
 type counterStmt bool
 
-func (c counterStmt) String() string {
+func (c counterStmt) String(tableName string) string {
 	sign := ""
 	if bool(c) {
 		sign = "+"
@@ -83,9 +83,6 @@ func (driver *Driver) Initialize(rawurl string) error {
 		return err
 	}
 
-	if err := driver.ensureVersionTableExists(); err != nil {
-		return err
-	}
 	return nil
 }
 
@@ -94,15 +91,16 @@ func (driver *Driver) Close() error {
 	return nil
 }
 
-func (driver *Driver) ensureVersionTableExists() error {
+func (driver *Driver) ensureVersionTableExists(migrationType string) error {
+	var tableName = getTableNameForType(migrationType)
 	err := driver.session.Query("CREATE TABLE IF NOT EXISTS " + tableName + " (version counter, versionRow bigint primary key);").Exec()
 	if err != nil {
 		return err
 	}
 
-	_, err = driver.Version()
+	_, err = driver.Version(migrationType)
 	if err != nil {
-		driver.session.Query(up.String(), versionRow).Exec()
+		driver.session.Query(up.String(tableName), versionRow).Exec()
 	}
 
 	return nil
@@ -112,7 +110,8 @@ func (driver *Driver) FilenameExtension() string {
 	return "cql"
 }
 
-func (driver *Driver) version(d direction.Direction, invert bool) error {
+func (driver *Driver) version(migrationType string, d direction.Direction, invert bool) error {
+	var tableName = getTableNameForType(migrationType)
 	var stmt counterStmt
 	switch d {
 	case direction.Up:
@@ -123,15 +122,15 @@ func (driver *Driver) version(d direction.Direction, invert bool) error {
 	if invert {
 		stmt = !stmt
 	}
-	return driver.session.Query(stmt.String(), versionRow).Exec()
+	return driver.session.Query(stmt.String(tableName), versionRow).Exec()
 }
 
-func (driver *Driver) Migrate(f file.File, pipe chan interface{}) {
+func (driver *Driver) Migrate(migrationType string, f file.File, pipe chan interface{}) {
 	var err error
 	defer func() {
 		if err != nil {
 			// Invert version direction if we couldn't apply the changes for some reason.
-			if err := driver.version(f.Direction, true); err != nil {
+			if err := driver.version(migrationType, f.Direction, true); err != nil {
 				pipe <- err
 			}
 			pipe <- err
@@ -139,8 +138,14 @@ func (driver *Driver) Migrate(f file.File, pipe chan interface{}) {
 		close(pipe)
 	}()
 
+	err = driver.ensureVersionTableExists(migrationType)
+	if err != nil {
+		pipe <- err
+		return
+	}
+
 	pipe <- f
-	if err = driver.version(f.Direction, false); err != nil {
+	if err = driver.version(migrationType, f.Direction, false); err != nil {
 		return
 	}
 
@@ -160,12 +165,23 @@ func (driver *Driver) Migrate(f file.File, pipe chan interface{}) {
 	}
 }
 
-func (driver *Driver) Version() (uint64, error) {
+func (driver *Driver) Version(migrationType string) (uint64, error) {
+	var tableName = getTableNameForType(migrationType)
 	var version int64
-	err := driver.session.Query("SELECT version FROM "+tableName+" WHERE versionRow = ?", versionRow).Scan(&version)
+
+	err := driver.ensureVersionTableExists(migrationType)
+	if err != nil {
+		return uint64(version), err
+	}
+
+	err = driver.session.Query("SELECT version FROM "+tableName+" WHERE versionRow = ?", versionRow).Scan(&version)
 	return uint64(version) - 1, err
 }
 
 func init() {
 	driver.RegisterDriver("cassandra", &Driver{})
+}
+
+func getTableNameForType(migrationType string) string {
+	return tablePrefix + migrationType
 }

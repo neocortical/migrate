@@ -1,6 +1,6 @@
 // Package main is the CLI.
 // You can use the CLI via Terminal.
-// import "github.com/mattes/migrate/migrate" for usage within Go.
+// import "github.com/neocortical/migrate/migrate" for usage within Go.
 package main
 
 import (
@@ -11,20 +11,21 @@ import (
 	"time"
 
 	"github.com/fatih/color"
-	_ "github.com/mattes/migrate/driver/bash"
-	_ "github.com/mattes/migrate/driver/cassandra"
-	_ "github.com/mattes/migrate/driver/mysql"
-	_ "github.com/mattes/migrate/driver/postgres"
-	_ "github.com/mattes/migrate/driver/sqlite3"
-	"github.com/mattes/migrate/file"
-	"github.com/mattes/migrate/migrate"
-	"github.com/mattes/migrate/migrate/direction"
-	pipep "github.com/mattes/migrate/pipe"
+	_ "github.com/neocortical/migrate/driver/bash"
+	_ "github.com/neocortical/migrate/driver/cassandra"
+	_ "github.com/neocortical/migrate/driver/mysql"
+	_ "github.com/neocortical/migrate/driver/postgres"
+	_ "github.com/neocortical/migrate/driver/sqlite3"
+	"github.com/neocortical/migrate/file"
+	"github.com/neocortical/migrate/migrate"
+	"github.com/neocortical/migrate/migrate/direction"
+	pipep "github.com/neocortical/migrate/pipe"
 )
 
 var url = flag.String("url", os.Getenv("MIGRATE_URL"), "")
 var migrationsPath = flag.String("path", "", "")
 var version = flag.Bool("version", false, "Show migrate version")
+var migrationType = flag.String("type", "schema", "Type of migration (i.e. schema or seed)")
 
 func main() {
 	flag.Usage = func() {
@@ -71,7 +72,7 @@ func main() {
 		}
 		timerStart = time.Now()
 		pipe := pipep.New()
-		go migrate.Migrate(pipe, *url, *migrationsPath, relativeNInt)
+		go migrate.Migrate(pipe, *url, *migrationsPath, *migrationType, relativeNInt)
 		ok := writePipe(pipe)
 		printTimer()
 		if !ok {
@@ -87,7 +88,7 @@ func main() {
 			os.Exit(1)
 		}
 
-		currentVersion, err := migrate.Version(*url, *migrationsPath)
+		currentVersion, err := migrate.Version(*url, *migrationsPath, *migrationType)
 		if err != nil {
 			fmt.Println(err)
 			os.Exit(1)
@@ -97,7 +98,7 @@ func main() {
 
 		timerStart = time.Now()
 		pipe := pipep.New()
-		go migrate.Migrate(pipe, *url, *migrationsPath, relativeNInt)
+		go migrate.Migrate(pipe, *url, *migrationsPath, *migrationType, relativeNInt)
 		ok := writePipe(pipe)
 		printTimer()
 		if !ok {
@@ -108,7 +109,7 @@ func main() {
 		verifyMigrationsPath(*migrationsPath)
 		timerStart = time.Now()
 		pipe := pipep.New()
-		go migrate.Up(pipe, *url, *migrationsPath)
+		go migrate.Up(pipe, *url, *migrationsPath, *migrationType)
 		ok := writePipe(pipe)
 		printTimer()
 		if !ok {
@@ -119,7 +120,7 @@ func main() {
 		verifyMigrationsPath(*migrationsPath)
 		timerStart = time.Now()
 		pipe := pipep.New()
-		go migrate.Down(pipe, *url, *migrationsPath)
+		go migrate.Down(pipe, *url, *migrationsPath, *migrationType)
 		ok := writePipe(pipe)
 		printTimer()
 		if !ok {
@@ -130,7 +131,7 @@ func main() {
 		verifyMigrationsPath(*migrationsPath)
 		timerStart = time.Now()
 		pipe := pipep.New()
-		go migrate.Redo(pipe, *url, *migrationsPath)
+		go migrate.Redo(pipe, *url, *migrationsPath, *migrationType)
 		ok := writePipe(pipe)
 		printTimer()
 		if !ok {
@@ -141,7 +142,7 @@ func main() {
 		verifyMigrationsPath(*migrationsPath)
 		timerStart = time.Now()
 		pipe := pipep.New()
-		go migrate.Reset(pipe, *url, *migrationsPath)
+		go migrate.Reset(pipe, *url, *migrationsPath, *migrationType)
 		ok := writePipe(pipe)
 		printTimer()
 		if !ok {
@@ -150,7 +151,7 @@ func main() {
 
 	case "version":
 		verifyMigrationsPath(*migrationsPath)
-		version, err := migrate.Version(*url, *migrationsPath)
+		version, err := migrate.Version(*url, *migrationsPath, *migrationType)
 		if err != nil {
 			fmt.Println(err)
 			os.Exit(1)
@@ -224,7 +225,7 @@ func printTimer() {
 
 func helpCmd() {
 	os.Stderr.WriteString(
-		`usage: migrate [-path=<path>] -url=<url> <command> [<args>]
+		`usage: migrate [-path=<path>] [-type=<migration-type>] -url=<url> <command> [<args>]
 
 Commands:
    create <name>  Create a new migration
@@ -238,5 +239,6 @@ Commands:
    help           Show this help
 
 '-path' defaults to current working directory.
+'-type' defaults 'schema'.
 `)
 }

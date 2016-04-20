@@ -5,7 +5,7 @@ import (
 	"fmt"
 	neturl "net/url" // alias to allow `url string` func signature in New
 
-	"github.com/mattes/migrate/file"
+	"github.com/neocortical/migrate/file"
 )
 
 // Driver is the interface type that needs to implemented by all drivers.
@@ -28,10 +28,10 @@ type Driver interface {
 	// It will receive a file which the driver should apply
 	// to its backend or whatever. The migration function should use
 	// the pipe channel to return any errors or other useful information.
-	Migrate(file file.File, pipe chan interface{})
+	Migrate(migrationType string, file file.File, pipe chan interface{})
 
 	// Version returns the current migration version.
-	Version() (uint64, error)
+	Version(migrationType string) (uint64, error)
 }
 
 // New returns Driver and calls Initialize on it

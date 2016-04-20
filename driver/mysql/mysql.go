@@ -12,16 +12,16 @@ import (
 	"strings"
 
 	"github.com/go-sql-driver/mysql"
-	"github.com/mattes/migrate/driver"
-	"github.com/mattes/migrate/file"
-	"github.com/mattes/migrate/migrate/direction"
+	"github.com/neocortical/migrate/driver"
+	"github.com/neocortical/migrate/file"
+	"github.com/neocortical/migrate/migrate/direction"
 )
 
 type Driver struct {
 	db *sql.DB
 }
 
-const tableName = "schema_migrations"
+const tablePrefix = "migrations_"
 
 func (driver *Driver) Initialize(url string) error {
 	urlWithoutScheme := strings.SplitN(url, "mysql://", 2)
@@ -38,9 +38,6 @@ func (driver *Driver) Initialize(url string) error {
 	}
 	driver.db = db
 
-	if err := driver.ensureVersionTableExists(); err != nil {
-		return err
-	}
 	return nil
 }
 
@@ -51,8 +48,9 @@ func (driver *Driver) Close() error {
 	return nil
 }
 
-func (driver *Driver) ensureVersionTableExists() error {
-	_, err := driver.db.Exec("CREATE TABLE IF NOT EXISTS " + tableName + " (version int not null primary key);")
+func (driver *Driver) ensureVersionTableExists(tableName string) error {
+	var cmd = fmt.Sprintf("CREATE TABLE IF NOT EXISTS %s (version int not null primary key);", tableName)
+	_, err := driver.db.Exec(cmd)
 
 	if _, isWarn := err.(mysql.MySQLWarnings); err != nil && !isWarn {
 		return err
@@ -65,8 +63,17 @@ func (driver *Driver) FilenameExtension() string {
 	return "sql"
 }
 
-func (driver *Driver) Migrate(f file.File, pipe chan interface{}) {
+func (driver *Driver) Migrate(migrationType string, f file.File, pipe chan interface{}) {
 	defer close(pipe)
+
+	var tableName = getTableNameForType(migrationType)
+
+	err := driver.ensureVersionTableExists(tableName)
+	if err != nil {
+		pipe <- err
+		return
+	}
+
 	pipe <- f
 
 	// http://go-database-sql.org/modifying.html, Working with Transactions
@@ -167,9 +174,16 @@ func (driver *Driver) Migrate(f file.File, pipe chan interface{}) {
 	}
 }
 
-func (driver *Driver) Version() (uint64, error) {
+func (driver *Driver) Version(migrationType string) (uint64, error) {
+	var tableName = getTableNameForType(migrationType)
 	var version uint64
-	err := driver.db.QueryRow("SELECT version FROM " + tableName + " ORDER BY version DESC").Scan(&version)
+
+	err := driver.ensureVersionTableExists(tableName)
+	if err != nil {
+		return version, err
+	}
+
+	err = driver.db.QueryRow("SELECT version FROM " + tableName + " ORDER BY version DESC").Scan(&version)
 	switch {
 	case err == sql.ErrNoRows:
 		return 0, nil
@@ -182,4 +196,8 @@ func (driver *Driver) Version() (uint64, error) {
 
 func init() {
 	driver.RegisterDriver("mysql", &Driver{})
+}
+
+func getTableNameForType(migrationType string) string {
+	return tablePrefix + migrationType
 }

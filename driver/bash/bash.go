@@ -2,8 +2,8 @@
 package bash
 
 import (
-	"github.com/mattes/migrate/driver"
-	"github.com/mattes/migrate/file"
+	"github.com/neocortical/migrate/driver"
+	"github.com/neocortical/migrate/file"
 )
 
 type Driver struct {
@@ -21,13 +21,13 @@ func (driver *Driver) FilenameExtension() string {
 	return "sh"
 }
 
-func (driver *Driver) Migrate(f file.File, pipe chan interface{}) {
+func (driver *Driver) Migrate(migrationType string, f file.File, pipe chan interface{}) {
 	defer close(pipe)
 	pipe <- f
 	return
 }
 
-func (driver *Driver) Version() (uint64, error) {
+func (driver *Driver) Version(migrationType string) (uint64, error) {
 	return uint64(0), nil
 }
 

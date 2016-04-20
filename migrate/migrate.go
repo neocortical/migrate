@@ -11,15 +11,15 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/mattes/migrate/driver"
-	"github.com/mattes/migrate/file"
-	"github.com/mattes/migrate/migrate/direction"
-	pipep "github.com/mattes/migrate/pipe"
+	"github.com/neocortical/migrate/driver"
+	"github.com/neocortical/migrate/file"
+	"github.com/neocortical/migrate/migrate/direction"
+	pipep "github.com/neocortical/migrate/pipe"
 )
 
 // Up applies all available migrations
-func Up(pipe chan interface{}, url, migrationsPath string) {
-	d, files, version, err := initDriverAndReadMigrationFilesAndGetVersion(url, migrationsPath)
+func Up(pipe chan interface{}, url, migrationsPath, migrationType string) {
+	d, files, version, err := initDriverAndReadMigrationFilesAndGetVersion(url, migrationsPath, migrationType)
 	if err != nil {
 		go pipep.Close(pipe, err)
 		return
@@ -37,7 +37,7 @@ func Up(pipe chan interface{}, url, migrationsPath string) {
 	if len(applyMigrationFiles) > 0 {
 		for _, f := range applyMigrationFiles {
 			pipe1 := pipep.New()
-			go d.Migrate(f, pipe1)
+			go d.Migrate(migrationType, f, pipe1)
 			if ok := pipep.WaitAndRedirect(pipe1, pipe, handleInterrupts()); !ok {
 				break
 			}
@@ -57,16 +57,16 @@ func Up(pipe chan interface{}, url, migrationsPath string) {
 }
 
 // UpSync is synchronous version of Up
-func UpSync(url, migrationsPath string) (err []error, ok bool) {
+func UpSync(url, migrationsPath, migrationType string) (err []error, ok bool) {
 	pipe := pipep.New()
-	go Up(pipe, url, migrationsPath)
+	go Up(pipe, url, migrationsPath, migrationType)
 	err = pipep.ReadErrors(pipe)
 	return err, len(err) == 0
 }
 
 // Down rolls back all migrations
-func Down(pipe chan interface{}, url, migrationsPath string) {
-	d, files, version, err := initDriverAndReadMigrationFilesAndGetVersion(url, migrationsPath)
+func Down(pipe chan interface{}, url, migrationsPath, migrationType string) {
+	d, files, version, err := initDriverAndReadMigrationFilesAndGetVersion(url, migrationsPath, migrationType)
 	if err != nil {
 		go pipep.Close(pipe, err)
 		return
@@ -84,7 +84,7 @@ func Down(pipe chan interface{}, url, migrationsPath string) {
 	if len(applyMigrationFiles) > 0 {
 		for _, f := range applyMigrationFiles {
 			pipe1 := pipep.New()
-			go d.Migrate(f, pipe1)
+			go d.Migrate(migrationType, f, pipe1)
 			if ok := pipep.WaitAndRedirect(pipe1, pipe, handleInterrupts()); !ok {
 				break
 			}
@@ -104,56 +104,56 @@ func Down(pipe chan interface{}, url, migrationsPath string) {
 }
 
 // DownSync is synchronous version of Down
-func DownSync(url, migrationsPath string) (err []error, ok bool) {
+func DownSync(url, migrationsPath, migrationType string) (err []error, ok bool) {
 	pipe := pipep.New()
-	go Down(pipe, url, migrationsPath)
+	go Down(pipe, url, migrationsPath, migrationType)
 	err = pipep.ReadErrors(pipe)
 	return err, len(err) == 0
 }
 
 // Redo rolls back the most recently applied migration, then runs it again.
-func Redo(pipe chan interface{}, url, migrationsPath string) {
+func Redo(pipe chan interface{}, url, migrationsPath, migrationType string) {
 	pipe1 := pipep.New()
-	go Migrate(pipe1, url, migrationsPath, -1)
+	go Migrate(pipe1, url, migrationsPath, migrationType, -1)
 	if ok := pipep.WaitAndRedirect(pipe1, pipe, handleInterrupts()); !ok {
 		go pipep.Close(pipe, nil)
 		return
 	} else {
-		go Migrate(pipe, url, migrationsPath, +1)
+		go Migrate(pipe, url, migrationsPath, migrationType, +1)
 	}
 }
 
 // RedoSync is synchronous version of Redo
-func RedoSync(url, migrationsPath string) (err []error, ok bool) {
+func RedoSync(url, migrationsPath, migrationType string) (err []error, ok bool) {
 	pipe := pipep.New()
-	go Redo(pipe, url, migrationsPath)
+	go Redo(pipe, url, migrationsPath, migrationType)
 	err = pipep.ReadErrors(pipe)
 	return err, len(err) == 0
 }
 
 // Reset runs the down and up migration function
-func Reset(pipe chan interface{}, url, migrationsPath string) {
+func Reset(pipe chan interface{}, url, migrationsPath, migrationType string) {
 	pipe1 := pipep.New()
-	go Down(pipe1, url, migrationsPath)
+	go Down(pipe1, url, migrationsPath, migrationType)
 	if ok := pipep.WaitAndRedirect(pipe1, pipe, handleInterrupts()); !ok {
 		go pipep.Close(pipe, nil)
 		return
 	} else {
-		go Up(pipe, url, migrationsPath)
+		go Up(pipe, url, migrationsPath, migrationType)
 	}
 }
 
 // ResetSync is synchronous version of Reset
-func ResetSync(url, migrationsPath string) (err []error, ok bool) {
+func ResetSync(url, migrationsPath, migrationType string) (err []error, ok bool) {
 	pipe := pipep.New()
-	go Reset(pipe, url, migrationsPath)
+	go Reset(pipe, url, migrationsPath, migrationType)
 	err = pipep.ReadErrors(pipe)
 	return err, len(err) == 0
 }
 
 // Migrate applies relative +n/-n migrations
-func Migrate(pipe chan interface{}, url, migrationsPath string, relativeN int) {
-	d, files, version, err := initDriverAndReadMigrationFilesAndGetVersion(url, migrationsPath)
+func Migrate(pipe chan interface{}, url, migrationsPath, migrationType string, relativeN int) {
+	d, files, version, err := initDriverAndReadMigrationFilesAndGetVersion(url, migrationsPath, migrationType)
 	if err != nil {
 		go pipep.Close(pipe, err)
 		return
@@ -171,7 +171,7 @@ func Migrate(pipe chan interface{}, url, migrationsPath string, relativeN int) {
 	if len(applyMigrationFiles) > 0 && relativeN != 0 {
 		for _, f := range applyMigrationFiles {
 			pipe1 := pipep.New()
-			go d.Migrate(f, pipe1)
+			go d.Migrate(migrationType, f, pipe1)
 			if ok := pipep.WaitAndRedirect(pipe1, pipe, handleInterrupts()); !ok {
 				break
 			}
@@ -190,20 +190,20 @@ func Migrate(pipe chan interface{}, url, migrationsPath string, relativeN int) {
 }
 
 // MigrateSync is synchronous version of Migrate
-func MigrateSync(url, migrationsPath string, relativeN int) (err []error, ok bool) {
+func MigrateSync(url, migrationsPath, migrationType string, relativeN int) (err []error, ok bool) {
 	pipe := pipep.New()
-	go Migrate(pipe, url, migrationsPath, relativeN)
+	go Migrate(pipe, url, migrationsPath, migrationType, relativeN)
 	err = pipep.ReadErrors(pipe)
 	return err, len(err) == 0
 }
 
 // Version returns the current migration version
-func Version(url, migrationsPath string) (version uint64, err error) {
+func Version(url, migrationsPath, migrationType string) (version uint64, err error) {
 	d, err := driver.New(url)
 	if err != nil {
 		return 0, err
 	}
-	return d.Version()
+	return d.Version(migrationType)
 }
 
 // Create creates new migration files on disk
@@ -263,7 +263,7 @@ func Create(url, migrationsPath, name string) (*file.MigrationFile, error) {
 
 // initDriverAndReadMigrationFilesAndGetVersion is a small helper
 // function that is common to most of the migration funcs
-func initDriverAndReadMigrationFilesAndGetVersion(url, migrationsPath string) (driver.Driver, *file.MigrationFiles, uint64, error) {
+func initDriverAndReadMigrationFilesAndGetVersion(url, migrationsPath, migrationType string) (driver.Driver, *file.MigrationFiles, uint64, error) {
 	d, err := driver.New(url)
 	if err != nil {
 		return nil, nil, 0, err
@@ -273,7 +273,7 @@ func initDriverAndReadMigrationFilesAndGetVersion(url, migrationsPath string) (d
 		d.Close() // TODO what happens with errors from this func?
 		return nil, nil, 0, err
 	}
-	version, err := d.Version()
+	version, err := d.Version(migrationType)
 	if err != nil {
 		d.Close() // TODO what happens with errors from this func?
 		return nil, nil, 0, err
