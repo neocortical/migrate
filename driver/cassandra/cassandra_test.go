@@ -18,6 +18,7 @@ func TestMigrate(t *testing.T) {
 	host := os.Getenv("CASSANDRA_PORT_9042_TCP_ADDR")
 	port := os.Getenv("CASSANDRA_PORT_9042_TCP_PORT")
 	driverUrl := "cassandra://" + host + ":" + port + "/system"
+	migType := "foo"
 
 	// prepare a clean test database
 	u, err := url.Parse(driverUrl)
@@ -89,21 +90,21 @@ func TestMigrate(t *testing.T) {
 	}
 
 	pipe := pipep.New()
-	go d.Migrate(files[0], pipe)
+	go d.Migrate(migType, files[0], pipe)
 	errs := pipep.ReadErrors(pipe)
 	if len(errs) > 0 {
 		t.Fatal(errs)
 	}
 
 	pipe = pipep.New()
-	go d.Migrate(files[1], pipe)
+	go d.Migrate(migType, files[1], pipe)
 	errs = pipep.ReadErrors(pipe)
 	if len(errs) > 0 {
 		t.Fatal(errs)
 	}
 
 	pipe = pipep.New()
-	go d.Migrate(files[2], pipe)
+	go d.Migrate(migType, files[2], pipe)
 	errs = pipep.ReadErrors(pipe)
 	if len(errs) == 0 {
 		t.Error("Expected test case to fail")

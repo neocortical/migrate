@@ -17,6 +17,7 @@ func TestMigrate(t *testing.T) {
 	host := os.Getenv("MYSQL_PORT_3306_TCP_ADDR")
 	port := os.Getenv("MYSQL_PORT_3306_TCP_PORT")
 	driverUrl := "mysql://root@tcp(" + host + ":" + port + ")/migratetest"
+	migType := "foo"
 
 	// prepare clean database
 	connection, err := sql.Open("mysql", strings.SplitN(driverUrl, "mysql://", 2)[1])
@@ -24,7 +25,7 @@ func TestMigrate(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if _, err := connection.Exec(`DROP TABLE IF EXISTS yolo, yolo1, ` + tableName); err != nil {
+	if _, err := connection.Exec(`DROP TABLE IF EXISTS yolo, yolo1, ` + getTableNameForType(migType)); err != nil {
 		t.Fatal(err)
 	}
 
@@ -77,21 +78,21 @@ func TestMigrate(t *testing.T) {
 	}
 
 	pipe := pipep.New()
-	go d.Migrate(files[0], pipe)
+	go d.Migrate(migType, files[0], pipe)
 	errs := pipep.ReadErrors(pipe)
 	if len(errs) > 0 {
 		t.Fatal(errs)
 	}
 
 	pipe = pipep.New()
-	go d.Migrate(files[1], pipe)
+	go d.Migrate(migType, files[1], pipe)
 	errs = pipep.ReadErrors(pipe)
 	if len(errs) > 0 {
 		t.Fatal(errs)
 	}
 
 	pipe = pipep.New()
-	go d.Migrate(files[2], pipe)
+	go d.Migrate(migType, files[2], pipe)
 	errs = pipep.ReadErrors(pipe)
 	if len(errs) == 0 {
 		t.Error("Expected test case to fail")

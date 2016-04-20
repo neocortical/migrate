@@ -12,6 +12,7 @@ import (
 // TestMigrate runs some additional tests on Migrate()
 // Basic testing is already done in migrate/migrate_test.go
 func TestMigrate(t *testing.T) {
+	var migType = "foo"
 	driverFile := ":memory:"
 	driverUrl := "sqlite3://" + driverFile
 
@@ -22,7 +23,7 @@ func TestMigrate(t *testing.T) {
 	}
 	if _, err := connection.Exec(`
 							DROP TABLE IF EXISTS yolo;
-							DROP TABLE IF EXISTS ` + tableName + `;`); err != nil {
+							DROP TABLE IF EXISTS ` + getTableNameForType(migType) + `;`); err != nil {
 		t.Fatal(err)
 	}
 
@@ -69,21 +70,21 @@ func TestMigrate(t *testing.T) {
 	}
 
 	pipe := pipep.New()
-	go d.Migrate(files[0], pipe)
+	go d.Migrate(migType, files[0], pipe)
 	errs := pipep.ReadErrors(pipe)
 	if len(errs) > 0 {
 		t.Fatal(errs)
 	}
 
 	pipe = pipep.New()
-	go d.Migrate(files[1], pipe)
+	go d.Migrate(migType, files[1], pipe)
 	errs = pipep.ReadErrors(pipe)
 	if len(errs) > 0 {
 		t.Fatal(errs)
 	}
 
 	pipe = pipep.New()
-	go d.Migrate(files[2], pipe)
+	go d.Migrate(migType, files[2], pipe)
 	errs = pipep.ReadErrors(pipe)
 	if len(errs) == 0 {
 		t.Error("Expected test case to fail")
