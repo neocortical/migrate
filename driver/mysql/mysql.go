@@ -21,7 +21,7 @@ type Driver struct {
 	db *sql.DB
 }
 
-const tablePrefix = "migrations_"
+const tableSuffix = "_migrations"
 
 func (driver *Driver) Initialize(url string) error {
 	urlWithoutScheme := strings.SplitN(url, "mysql://", 2)
@@ -199,5 +199,5 @@ func init() {
 }
 
 func getTableNameForType(migrationType string) string {
-	return tablePrefix + migrationType
+	return migrationType + tableSuffix
 }

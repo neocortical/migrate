@@ -19,7 +19,7 @@ type Driver struct {
 }
 
 const (
-	tablePrefix = "migrations_"
+	tableSuffix = "_migrations"
 	versionRow  = 1
 )
 
@@ -183,5 +183,5 @@ func init() {
 }
 
 func getTableNameForType(migrationType string) string {
-	return tablePrefix + migrationType
+	return migrationType + tableSuffix
 }

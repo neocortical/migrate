@@ -17,7 +17,7 @@ type Driver struct {
 	db *sql.DB
 }
 
-const tablePrefix = "migrations_"
+const tableSuffix = "_migrations"
 
 func (driver *Driver) Initialize(url string) error {
 	db, err := sql.Open("postgres", url)
@@ -141,5 +141,5 @@ func init() {
 }
 
 func getTableNameForType(migrationType string) string {
-	return tablePrefix + migrationType
+	return migrationType + tableSuffix
 }
