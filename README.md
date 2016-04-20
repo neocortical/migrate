@@ -68,6 +68,11 @@ migrate -url driver://url -path ./migrations migrate -n
 migrate -url driver://url -path ./migrations goto 1
 migrate -url driver://url -path ./migrations goto 10
 migrate -url driver://url -path ./migrations goto v
+
+# run migrations from a separate migration path (e.g. data seeding by environment)
+migrate -url driver://url -path ./stage/data -type seeds up
+# all migrate commands work for separate types
+migrate -url driver://url -path ./stage/data -type seeds version
 ```
 
 
@@ -82,7 +87,14 @@ import "github.com/neocortical/migrate/migrate"
 import _ "github.com/neocortical/migrate/driver/mysql"
 
 // use synchronous versions of migration functions ...
-allErrors, ok := migrate.UpSync("driver://url", "./path")
+allErrors, ok := migrate.UpSync("schema", "driver://url", "./path")
+if !ok {
+  fmt.Println("Oh no ...")
+  // do sth with allErrors slice
+}
+
+// use another migration "type" for things like data seeding
+allErrors, ok = migrate.UpSync("seeds", driver://url", "./data/seed/dev/path")
 if !ok {
   fmt.Println("Oh no ...")
   // do sth with allErrors slice
